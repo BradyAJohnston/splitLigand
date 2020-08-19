@@ -1,0 +1,53 @@
+#!/bin/bash
+
+## The pdb friles from gmx trjconv are all one large structure. For ligand analysis
+## this needs to be in one structure but seperate chains. This script just takes
+## a multi-frame file and splits it into individual pdbs. It then takes each pdb
+## and splits it via resno (protein 1-610, rna 611-629), assigns the chain ID
+## A for protein, B for RNA, then re-merges all of the frames again.
+##
+## Should result in a multi-frame file that is suitable for ligand
+## contact-map analysis and ligand analsis with programs like bio3d and LigsPlus.
+
+
+s=$1
+#gets filename without pdb
+s=${s##*/}
+s=`echo ${s%.*}`
+
+#splits into models that are filename_$n.pdb where $n is number of models
+pdb_splitmodel $1
+
+#finds all of the split model pdb files.
+nmodel=`ls $s\_*.pdb`
+
+# counter, not useful yet.
+n=0
+
+for i in $nmodel:
+do
+  n=`expr $n + 1`
+
+  # reports on file being worked on currently
+
+  echo $i
+
+  #extracts protein, will implement other resno capabilities soon.
+  pdb_selres -1:610 $i | pdb_reres | pdb_chain -A > protein_chained_$i
+
+  #extracts rna, will implement other resno capabilities soon.
+  pdb_selres -611:629 $i | pdb_reres | pdb_chain -B > rna_chained_$i
+
+  #merges the two extracted files that have had chain IDs added.
+  pdb_merge protein_chained_$i rna_chained_$i > constructed_$i
+
+  #cleans up all of the previous working files.
+  rm protein_chained_$i rna_chained_$i
+done
+
+# Assembles into the master .pdb file.
+pdb_mkensemble `ls constructed_*.pdb` > complete_merged.pdb
+
+#removes all other previous working files.
+rm `ls constructed_*.pdb*`
+rm $nmodel
